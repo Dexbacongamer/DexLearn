@@ -3528,110 +3528,101 @@
         ============================================================ */
      
      function openCategoryModal(category = null) {
-     
+
          state.editingCategory = category;
-     
+
          $("categoryModalTitle").textContent =
-             category
-                 ? "Edit Category"
-                 : "Create Category";
-     
-         $("categoryId").value =
-             category?.id || makeId();
-     
-         $("categoryName").value =
-             category?.name || "";
-     
+             category ? "Edit Category" : "Create Category";
+
+         $("categoryId").value = category?.id || "";
+
+         $("categoryName").value = category?.name || "";
+
          $("categoryDescription").value =
              category?.description || "";
-     
+
          openModal("categoryModal");
      }
-     
-     
+
+
      let categorySubmitBusy = false;
 
      $("categoryForm").addEventListener("submit", async event => {
-     
+
          event.preventDefault();
 
          if (categorySubmitBusy) return;
-     
-         const id =
-             $("categoryId").value;
-     
-         const payload = {
-             user_id: state.user.id,
-             name: $("categoryName").value.trim(),
-             description:
-                 $("categoryDescription").value.trim()
-         };
-     
-         if (!payload.name) return;
-     
+
+         const name = $("categoryName").value.trim();
+         const description = $("categoryDescription").value.trim();
+
+         if (!name || !state.user) return;
+
          categorySubmitBusy = true;
-         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         const submitButton =
+             event.currentTarget.querySelector('button[type="submit"]');
          if (submitButton) submitButton.disabled = true;
-     
+
          try {
-     
+             const uid = state.user.id;
+
              if (state.editingCategory) {
-     
-                 const { data, error } =
-                     await firebaseClient
-                         .from("categories")
-                         .update({
-                             name: payload.name,
-                             description: payload.description
-                         })
-                         .eq("id", id)
-                         .select()
-                         .single();
-     
-                 if (error) throw error;
-     
-                 const index =
-                     state.categories.findIndex(
-                         item => item.id === id
+                 const id = state.editingCategory.id;
+                 const ref = firebaseDB.ref(
+                     `users/${uid}/categories/${id}`
+                 );
+
+                 const snap = await ref.once("value");
+                 if (!snap.exists()) {
+                     throw new Error(
+                         "The category no longer exists. Please close this window and try again."
                      );
-     
-                 if (index !== -1)
-                     state.categories[index] = data;
-     
-                 showToast(
-                     "Category updated",
-                     payload.name,
-                     "success"
+                 }
+
+                 const existing = snap.val();
+                 const updated = {
+                     ...existing,
+                     id,
+                     user_id: uid,
+                     name,
+                     description,
+                     updated_at: nowISO()
+                 };
+
+                 await ref.set(updated);
+
+                 state.categories = state.categories.map(item =>
+                     item.id === id ? updated : item
                  );
-     
+
+                 showToast("Category updated", name, "success");
+
              } else {
-     
-                 const { data, error } =
-                     await firebaseClient
-                         .from("categories")
-                         .insert(payload)
-                         .select()
-                         .single();
-     
-                 if (error) throw error;
-     
-                 state.categories.unshift(data);
-     
-                 showToast(
-                     "Category created",
-                     payload.name,
-                     "success"
-                 );
+                 const ref = firebaseDB.ref(`users/${uid}/categories`).push();
+                 const id = ref.key;
+
+                 const created = {
+                     id,
+                     user_id: uid,
+                     name,
+                     description,
+                     created_at: nowISO(),
+                     updated_at: nowISO()
+                 };
+
+                 await ref.set(created);
+
+                 state.categories.unshift(created);
+
+                 showToast("Category created", name, "success");
              }
-     
+
              saveLocalCache();
-     
              closeModal("categoryModal");
-     
              renderAll();
-     
+
          } catch (error) {
-     
+             console.error("DexLearn category write failed:", error);
              showToast(
                  "Category error",
                  cleanError(error.message),
@@ -3640,10 +3631,11 @@
          } finally {
              categorySubmitBusy = false;
              if (submitButton) submitButton.disabled = false;
+             state.editingCategory = null;
          }
      });
-     
-     
+
+
      async function deleteCategory(id) {
      
          const category =
@@ -3711,148 +3703,122 @@
         ============================================================ */
      
      function openLessonModal(lesson = null) {
-     
+
          state.editingLesson = lesson;
-     
+
          $("lessonModalTitle").textContent =
-             lesson
-                 ? "Edit Lesson"
-                 : "Create Lesson";
-     
-         $("lessonId").value =
-             lesson?.id || makeId();
-     
-         populateCategorySelect(
-             $("lessonCategory")
-         );
-     
+             lesson ? "Edit Lesson" : "Create Lesson";
+
+         $("lessonId").value = lesson?.id || "";
+
+         populateCategorySelect($("lessonCategory"));
+
          $("lessonCategory").value =
-             lesson?.category_id ||
-             state.currentCategory ||
-             "";
-     
-         $("lessonTitle").value =
-             lesson?.title || "";
-     
-         $("lessonType").value =
-             lesson?.type || "description";
-     
-         $("lessonContent").value =
-             lesson?.content || "";
-     
+             lesson?.category_id || state.currentCategory || "";
+
+         $("lessonTitle").value = lesson?.title || "";
+         $("lessonType").value = lesson?.type || "description";
+         $("lessonContent").value = lesson?.content || "";
+
          updateWordCounter();
-     
          openModal("lessonModal");
      }
-     
-     
+
+
      let lessonSubmitBusy = false;
 
      $("lessonForm").addEventListener("submit", async event => {
-     
+
          event.preventDefault();
 
          if (lessonSubmitBusy) return;
-     
-         const id =
-             $("lessonId").value;
-     
-         const content =
-             $("lessonContent").value.trim();
-     
-         const wordCount =
-             countWords(content);
-     
+
+         const categoryId = $("lessonCategory").value;
+         const title = $("lessonTitle").value.trim();
+         const type = $("lessonType").value;
+         const content = $("lessonContent").value.trim();
+
+         if (!categoryId || !title || !content || !state.user) return;
+
+         const wordCount = countWords(content);
          if (wordCount > 100000) {
-     
              showToast(
                  "Lesson too long",
                  "Keep the lesson below 100,000 words.",
                  "error"
              );
-     
              return;
          }
-     
-         const payload = {
-             user_id: state.user.id,
-             category_id: $("lessonCategory").value,
-             title: $("lessonTitle").value.trim(),
-             type: $("lessonType").value,
-             content
-         };
-     
-         if (
-             !payload.category_id ||
-             !payload.title ||
-             !payload.content
-         ) return;
-     
+
          lessonSubmitBusy = true;
-         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         const submitButton =
+             event.currentTarget.querySelector('button[type="submit"]');
          if (submitButton) submitButton.disabled = true;
-     
+
          try {
-     
+             const uid = state.user.id;
+
              if (state.editingLesson) {
-     
-                 const { data, error } =
-                     await firebaseClient
-                         .from("lessons")
-                         .update({
-                             category_id: payload.category_id,
-                             title: payload.title,
-                             type: payload.type,
-                             content: payload.content
-                         })
-                         .eq("id", id)
-                         .select()
-                         .single();
-     
-                 if (error) throw error;
-     
-                 const index =
-                     state.lessons.findIndex(
-                         lesson => lesson.id === id
+                 const id = state.editingLesson.id;
+                 const ref = firebaseDB.ref(
+                     `users/${uid}/lessons/${id}`
+                 );
+
+                 const snap = await ref.once("value");
+                 if (!snap.exists()) {
+                     throw new Error(
+                         "The lesson no longer exists. Please close this window and try again."
                      );
-     
-                 if (index !== -1)
-                     state.lessons[index] = data;
-     
-                 showToast(
-                     "Lesson updated",
-                     payload.title,
-                     "success"
+                 }
+
+                 const existing = snap.val();
+                 const updated = {
+                     ...existing,
+                     id,
+                     user_id: uid,
+                     category_id: categoryId,
+                     title,
+                     type,
+                     content,
+                     updated_at: nowISO()
+                 };
+
+                 await ref.set(updated);
+
+                 state.lessons = state.lessons.map(item =>
+                     item.id === id ? updated : item
                  );
-     
+
+                 showToast("Lesson updated", title, "success");
+
              } else {
-     
-                 const { data, error } =
-                     await firebaseClient
-                         .from("lessons")
-                         .insert(payload)
-                         .select()
-                         .single();
-     
-                 if (error) throw error;
-     
-                 state.lessons.unshift(data);
-     
-                 showToast(
-                     "Lesson created",
-                     payload.title,
-                     "success"
-                 );
+                 const ref = firebaseDB.ref(`users/${uid}/lessons`).push();
+                 const id = ref.key;
+
+                 const created = {
+                     id,
+                     user_id: uid,
+                     category_id: categoryId,
+                     title,
+                     type,
+                     content,
+                     created_at: nowISO(),
+                     updated_at: nowISO()
+                 };
+
+                 await ref.set(created);
+
+                 state.lessons.unshift(created);
+
+                 showToast("Lesson created", title, "success");
              }
-     
+
              saveLocalCache();
-     
              closeModal("lessonModal");
-     
              renderAll();
-     
+
          } catch (error) {
-     
+             console.error("DexLearn lesson write failed:", error);
              showToast(
                  "Lesson error",
                  cleanError(error.message),
@@ -3861,10 +3827,11 @@
          } finally {
              lessonSubmitBusy = false;
              if (submitButton) submitButton.disabled = false;
+             state.editingLesson = null;
          }
      });
-     
-     
+
+
      async function deleteLesson(id) {
      
          const lesson =
