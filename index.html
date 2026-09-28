@@ -3556,9 +3556,6 @@
          event.preventDefault();
 
          if (categorySubmitBusy) return;
-         categorySubmitBusy = true;
-         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
-         if (submitButton) submitButton.disabled = true;
      
          const id =
              $("categoryId").value;
@@ -3572,9 +3569,13 @@
      
          if (!payload.name) return;
      
+         categorySubmitBusy = true;
+         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         if (submitButton) submitButton.disabled = true;
+     
          try {
      
-             if (id) {
+             if (state.editingCategory) {
      
                  const { data, error } =
                      await firebaseClient
@@ -3752,9 +3753,6 @@
          event.preventDefault();
 
          if (lessonSubmitBusy) return;
-         lessonSubmitBusy = true;
-         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
-         if (submitButton) submitButton.disabled = true;
      
          const id =
              $("lessonId").value;
@@ -3790,9 +3788,13 @@
              !payload.content
          ) return;
      
+         lessonSubmitBusy = true;
+         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         if (submitButton) submitButton.disabled = true;
+     
          try {
      
-             if (id) {
+             if (state.editingLesson) {
      
                  const { data, error } =
                      await firebaseClient
