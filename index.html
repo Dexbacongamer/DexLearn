@@ -3482,6 +3482,17 @@
      }
      
      
+     function uniqueById(items) {
+         const seen = new Set();
+         return items.filter(item => {
+             const id = item?.id;
+             if (!id || seen.has(id)) return false;
+             seen.add(id);
+             return true;
+         });
+     }
+
+
      /* ============================================================
         REALTIME DEVICE SYNC
         ============================================================ */
@@ -3496,10 +3507,10 @@
          const handler = snapshot => {
              const root = snapshot.val() || {};
              if (root.profile) state.profile = root.profile;
-             state.categories = Object.values(root.categories || {});
-             state.lessons = Object.values(root.lessons || {});
-             state.decks = Object.values(root.flashcard_decks || {});
-             state.cards = Object.values(root.flashcards || {});
+             state.categories = uniqueById(Object.values(root.categories || {}));
+             state.lessons = uniqueById(Object.values(root.lessons || {}));
+             state.decks = uniqueById(Object.values(root.flashcard_decks || {}));
+             state.cards = uniqueById(Object.values(root.flashcards || {}));
              saveLocalCache();
              if (!$('appShell').classList.contains('hidden')) renderAll();
          };
@@ -3526,7 +3537,7 @@
                  : "Create Category";
      
          $("categoryId").value =
-             category?.id || "";
+             category?.id || makeId();
      
          $("categoryName").value =
              category?.name || "";
@@ -3538,9 +3549,16 @@
      }
      
      
+     let categorySubmitBusy = false;
+
      $("categoryForm").addEventListener("submit", async event => {
      
          event.preventDefault();
+
+         if (categorySubmitBusy) return;
+         categorySubmitBusy = true;
+         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         if (submitButton) submitButton.disabled = true;
      
          const id =
              $("categoryId").value;
@@ -3618,6 +3636,9 @@
                  cleanError(error.message),
                  "error"
              );
+         } finally {
+             categorySubmitBusy = false;
+             if (submitButton) submitButton.disabled = false;
          }
      });
      
@@ -3698,7 +3719,7 @@
                  : "Create Lesson";
      
          $("lessonId").value =
-             lesson?.id || "";
+             lesson?.id || makeId();
      
          populateCategorySelect(
              $("lessonCategory")
@@ -3724,9 +3745,16 @@
      }
      
      
+     let lessonSubmitBusy = false;
+
      $("lessonForm").addEventListener("submit", async event => {
      
          event.preventDefault();
+
+         if (lessonSubmitBusy) return;
+         lessonSubmitBusy = true;
+         const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+         if (submitButton) submitButton.disabled = true;
      
          const id =
              $("lessonId").value;
@@ -3828,6 +3856,9 @@
                  cleanError(error.message),
                  "error"
              );
+         } finally {
+             lessonSubmitBusy = false;
+             if (submitButton) submitButton.disabled = false;
          }
      });
      
